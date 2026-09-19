@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react'
+import { CandidateHighlight } from './components/CandidateHighlight/CandidateHighlight'
 import { DetectionPanel } from './components/DetectionPanel/DetectionPanel'
 import { DocumentList } from './components/DocumentList/DocumentList'
 import { PDFCanvas } from './components/PDFCanvas/PDFCanvas'
@@ -43,6 +44,7 @@ export default function App() {
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [highlightedCandidate, setHighlightedCandidate] = useState<DetectionCandidate | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const lastImageDataRef = useRef<ImageData | null>(null)
@@ -298,6 +300,7 @@ export default function App() {
                   onAccept={handleAcceptCandidate}
                   onReject={handleRejectCandidate}
                   onClose={() => setShowDetection(false)}
+                  onHoverCandidate={setHighlightedCandidate}
                 />
               </aside>
             )}
@@ -329,6 +332,13 @@ export default function App() {
                       onAdd={pos => addTextBox(currentPage - 1, pos)}
                       onUpdate={updateTextBox}
                       onDelete={deleteTextBox}
+                    />
+                  )}
+                  {canvasSize.w > 0 && highlightedCandidate && (
+                    <CandidateHighlight
+                      candidate={highlightedCandidate}
+                      canvasWidth={canvasSize.w}
+                      canvasHeight={canvasSize.h}
                     />
                   )}
                 </div>

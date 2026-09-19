@@ -19,8 +19,8 @@ export interface UsePdfViewerReturn {
   currentPage: number
   totalPages: number
   zoom: number
-  setCurrentPage: (page: number) => void
-  setZoom: (zoom: number) => void
+  setCurrentPage: React.Dispatch<React.SetStateAction<number>>
+  setZoom: React.Dispatch<React.SetStateAction<number>>
   loadPdf: (buffer: ArrayBuffer) => Promise<void>
   isLoading: boolean
   error: string | null
@@ -34,16 +34,26 @@ export function usePdfViewer(): UsePdfViewerReturn {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const currentDocRef = useRef<pdfjs.PDFDocumentProxy | null>(null)
+  const loadingTaskRef = useRef<ReturnType<typeof pdfjs.getDocument> | null>(null)
+
+  /** Cleanup seguro — ignora erros se o proxy já foi destruído (ex.: HMR). */
+  const destroyCurrentDoc = useCallback(async () => {
+    try {
+      loadingTaskRef.current?.destroy()
+      loadingTaskRef.current = null
+      currentDocRef.current = null
+    } catch {
+      // Proxy já destruído — ignora silenciosamente.
+    }
+  }, [])
 
   const loadPdf = useCallback(async (buffer: ArrayBuffer) => {
     setIsLoading(true)
     setError(null)
     try {
-      // Destrói doc anterior para liberar memória
-      if (currentDocRef.current) {
-        await currentDocRef.current.destroy()
-      }
+      await destroyCurrentDoc()
       const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) })
+      loadingTaskRef.current = loadingTask
       const doc = await loadingTask.promise
       currentDocRef.current = doc
       setPdfDoc(doc)
@@ -55,14 +65,14 @@ export function usePdfViewer(): UsePdfViewerReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [destroyCurrentDoc])
 
   // Cleanup na desmontagem
   useEffect(() => {
     return () => {
-      currentDocRef.current?.destroy()
+      destroyCurrentDoc()
     }
-  }, [])
+  }, [destroyCurrentDoc])
 
   return {
     pdfDoc,

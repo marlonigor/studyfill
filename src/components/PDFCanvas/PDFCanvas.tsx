@@ -1,15 +1,13 @@
 /**
- * PDFCanvas: renderiza uma única página do PDF num elemento <canvas>.
- *
- * Emite onRenderComplete com o ImageData da página (usado pela detecção).
- * A escala (zoom) é aplicada multiplicada pelo devicePixelRatio para nitidez.
+ * PDFCanvas: renderiza uma única página do PDF num elemento <canvas>,
+ * incluindo uma camada de texto selecionável (TextLayer do PDF.js).
  *
  * Os callbacks onRenderComplete e onSizeChange são armazenados em refs para
- * evitar que o useEffect principal re-execute a cada render do pai — o que
- * causava loop infinito (render → setCanvasSize → re-render → render...).
+ * evitar loop infinito de re-render (render → setCanvasSize → re-render...).
  */
 
 import * as pdfjs from 'pdfjs-dist'
+import 'pdfjs-dist/web/pdf_viewer.css'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import styles from './PDFCanvas.module.css'
 
@@ -29,60 +27,95 @@ export function PDFCanvas({
   onSizeChange,
 }: PDFCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const textLayerRef = useRef<HTMLDivElement>(null)
   const renderTaskRef = useRef<pdfjs.RenderTask | null>(null)
+  const textLayerInstanceRef = useRef<pdfjs.TextLayer | null>(null)
 
-  // Refs para callbacks: evitam que o effect de renderização reexecute
-  // quando o pai re-renderiza com funções novas mas semanticamente iguais.
+  // Refs para callbacks — evita reexecução do effect ao receber funções novas.
   const onRenderCompleteRef = useRef(onRenderComplete)
   const onSizeChangeRef = useRef(onSizeChange)
   useLayoutEffect(() => { onRenderCompleteRef.current = onRenderComplete }, [onRenderComplete])
   useLayoutEffect(() => { onSizeChangeRef.current = onSizeChange }, [onSizeChange])
 
   useEffect(() => {
-    if (!canvasRef.current) return
+    if (!canvasRef.current || !textLayerRef.current) return
 
     const canvas = canvasRef.current
+    const textLayerDiv = textLayerRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     let cancelled = false
 
     const render = async () => {
-      // Cancela renderização anterior se ainda em andamento
+      // Cancela renderização anterior
       if (renderTaskRef.current) {
         renderTaskRef.current.cancel()
         renderTaskRef.current = null
       }
+      if (textLayerInstanceRef.current) {
+        textLayerInstanceRef.current.cancel()
+        textLayerInstanceRef.current = null
+      }
+      // Limpa text layer anterior
+      textLayerDiv.innerHTML = ''
 
       const page = await pdfDoc.getPage(pageNumber)
       if (cancelled) return
 
       const dpr = window.devicePixelRatio || 1
       const viewport = page.getViewport({ scale: zoom * dpr })
+      const cssViewport = page.getViewport({ scale: zoom })
 
+      // Canvas: resolução alta para nitidez, dimensões CSS para layout
       canvas.width = viewport.width
       canvas.height = viewport.height
-      canvas.style.width = `${viewport.width / dpr}px`
-      canvas.style.height = `${viewport.height / dpr}px`
+      canvas.style.width = `${cssViewport.width}px`
+      canvas.style.height = `${cssViewport.height}px`
 
-      onSizeChangeRef.current?.(viewport.width / dpr, viewport.height / dpr)
+      // Text layer: mesmas dimensões CSS do canvas
+      textLayerDiv.style.width = `${cssViewport.width}px`
+      textLayerDiv.style.height = `${cssViewport.height}px`
 
+      onSizeChangeRef.current?.(cssViewport.width, cssViewport.height)
+
+      // Render do canvas
       const renderTask = page.render({ canvasContext: ctx, viewport })
       renderTaskRef.current = renderTask
 
       try {
         await renderTask.promise
-        if (!cancelled) {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-          onRenderCompleteRef.current?.(imageData, canvas)
-        }
+        if (cancelled) return
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        onRenderCompleteRef.current?.(imageData, canvas)
       } catch (err) {
-        // pdfjs-dist usa um objeto com .name === 'RenderingCancelledException'
         const isCancel =
           (err as { name?: string })?.name === 'RenderingCancelledException' ||
           (err instanceof Error && err.message.includes('Rendering cancelled'))
         if (!isCancel) {
           console.error('[PDFCanvas] Erro de renderização:', err)
+        }
+        return // Se cancelou, não tenta renderizar text layer
+      }
+
+      // TextLayer: camada de texto selecionável sobre o canvas
+      if (cancelled) return
+      try {
+        const textContent = await page.getTextContent()
+        if (cancelled) return
+
+        const textLayer = new pdfjs.TextLayer({
+          textContentSource: textContent,
+          container: textLayerDiv,
+          viewport: cssViewport,
+        })
+        textLayerInstanceRef.current = textLayer
+        await textLayer.render()
+      } catch (err) {
+        // Ignora erros de cancelamento no text layer
+        if (!(err instanceof Error && err.message.includes('cancel'))) {
+          console.error('[PDFCanvas] Erro ao renderizar text layer:', err)
         }
       }
     }
@@ -92,8 +125,14 @@ export function PDFCanvas({
     return () => {
       cancelled = true
       renderTaskRef.current?.cancel()
+      textLayerInstanceRef.current?.cancel()
     }
-  }, [pdfDoc, pageNumber, zoom]) // callbacks fora das deps — chegam via ref
+  }, [pdfDoc, pageNumber, zoom])
 
-  return <canvas ref={canvasRef} className={styles.canvas} />
+  return (
+    <div className={styles.pageContainer}>
+      <canvas ref={canvasRef} className={styles.canvas} />
+      <div ref={textLayerRef} className={`textLayer ${styles.textLayer}`} />
+    </div>
+  )
 }

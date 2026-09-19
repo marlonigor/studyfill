@@ -1,0 +1,38 @@
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.highlight {
+  position: absolute;
+  background: rgba(99, 102, 241, 0.2);
+  border: 2px solid rgba(99, 102, 241, 0.7);
+  border-radius: 4px;
+  animation: pulseHighlight 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulseHighlight {
+  from {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.5);
+  }
+  to {
+    background: rgba(99, 102, 241, 0.3);
+    border-color: rgba(99, 102, 241, 0.85);
+  }
+}
+
+.guideLine {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(99, 102, 241, 0.5) 10%,
+    rgba(99, 102, 241, 0.5) 90%,
+    transparent 100%
+  );
+}

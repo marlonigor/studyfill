@@ -3,6 +3,9 @@
  *
  * ADR-004: nenhuma sugestão é aplicada sem confirmação do usuário.
  * Fluxo: Detectar → lista de candidatos → Aceitar / Rejeitar um a um.
+ *
+ * Ao passar o mouse sobre uma sugestão, emite onHoverCandidate para que
+ * o App exiba um highlight no documento, indicando onde a sugestão se localiza.
  */
 
 import type { DetectionCandidate } from '../../types'
@@ -15,6 +18,8 @@ interface DetectionPanelProps {
   onAccept: (candidate: DetectionCandidate) => void
   onReject: (candidateId: string) => void
   onClose: () => void
+  /** Emitido ao entrar/sair de hover numa sugestão. null = nenhum highlight. */
+  onHoverCandidate: (candidate: DetectionCandidate | null) => void
 }
 
 export function DetectionPanel({
@@ -24,6 +29,7 @@ export function DetectionPanel({
   onAccept,
   onReject,
   onClose,
+  onHoverCandidate,
 }: DetectionPanelProps) {
   const pending = candidates.filter(c => !c.accepted)
 
@@ -36,7 +42,7 @@ export function DetectionPanel({
 
       <p className={styles.description}>
         A detecção busca linhas horizontais que possam ser espaços de preenchimento.
-        Você decide o que aceitar.
+        Você decide o que aceitar. <strong>Passe o mouse</strong> para ver onde está.
       </p>
 
       <button
@@ -58,7 +64,12 @@ export function DetectionPanel({
 
       <ul className={styles.list}>
         {pending.map((c, i) => (
-          <li key={c.id} className={styles.candidate}>
+          <li
+            key={c.id}
+            className={styles.candidate}
+            onMouseEnter={() => onHoverCandidate(c)}
+            onMouseLeave={() => onHoverCandidate(null)}
+          >
             <span className={styles.candidateLabel}>
               Linha {i + 1} — y: {(c.position.y * 100).toFixed(1)}%
             </span>
