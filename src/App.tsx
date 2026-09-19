@@ -180,24 +180,43 @@ export default function App() {
     }
   }, [currentDoc, editLayer])
 
-  // ── Zoom ─────────────────────────────────────────────────────────────────
+  // ── Zoom — functional updates para não capturar zoom/page obsoletos ───────
 
-  const handleZoomIn = () => setZoom(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))
-  const handleZoomOut = () => setZoom(Math.max(ZOOM_MIN, zoom - ZOOM_STEP))
-  const handleZoomReset = () => setZoom(1.0)
+  const handleZoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, z + ZOOM_STEP)), [])
+  const handleZoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, z - ZOOM_STEP)), [])
+  const handleZoomReset = useCallback(() => setZoom(1.0), [])
 
   // ── Navegação de páginas ─────────────────────────────────────────────────
 
-  const handlePrevPage = () => setCurrentPage(Math.max(1, currentPage - 1))
-  const handleNextPage = () => setCurrentPage(Math.min(totalPages, currentPage + 1))
+  const handlePrevPage = useCallback(() => setCurrentPage(p => Math.max(1, p - 1)), [])
+  const handleNextPage = useCallback(
+    () => setCurrentPage(p => Math.min(totalPages, p + 1)),
+    [totalPages],
+  )
 
-  // ── Detecção ─────────────────────────────────────────────────────────────
+  // ── Callbacks estáveis para PDFCanvas ────────────────────────────────────
+  // Precisam ser estáveis para que o useLayoutEffect no PDFCanvas não execute
+  // desnecessariamente. Não têm deps além das refs — atualizamos via ref lá.
+
+  const handleRenderComplete = useCallback(
+    (imageData: ImageData, canvas: HTMLCanvasElement) => {
+      lastImageDataRef.current = imageData
+      setCanvasSize({ w: canvas.offsetWidth, h: canvas.offsetHeight })
+    },
+    [],
+  )
+
+  const handleSizeChange = useCallback((w: number, h: number) => {
+    setCanvasSize({ w, h })
+  }, [])
+
+  // ── Detecção (assíncrona para não travar a UI) ────────────────────────────
 
   const handleDetect = useCallback(async () => {
     if (!lastImageDataRef.current) return
     setIsDetecting(true)
     try {
-      const found = detectHorizontalLines(lastImageDataRef.current, currentPage - 1)
+      const found = await detectHorizontalLines(lastImageDataRef.current, currentPage - 1)
       setCandidates(found)
     } finally {
       setIsDetecting(false)
@@ -298,11 +317,8 @@ export default function App() {
                     pdfDoc={pdfDoc}
                     pageNumber={currentPage}
                     zoom={zoom}
-                    onRenderComplete={(imageData, canvas) => {
-                      lastImageDataRef.current = imageData
-                      setCanvasSize({ w: canvas.offsetWidth, h: canvas.offsetHeight })
-                    }}
-                    onSizeChange={(w, h) => setCanvasSize({ w, h })}
+                    onRenderComplete={handleRenderComplete}
+                    onSizeChange={handleSizeChange}
                   />
                   {canvasSize.w > 0 && (
                     <TextBoxLayer

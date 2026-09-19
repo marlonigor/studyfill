@@ -4,11 +4,11 @@
  * V1: busca linhas horizontais no canvas renderizado que possam representar
  * espaços de preenchimento (linhas tracejadas ou sólidas de largura mínima).
  *
+ * A detecção é ASSÍNCRONA e cede ao main thread a cada bloco de linhas,
+ * evitando que a UI trave durante a análise (scheduler.yield / setTimeout).
+ *
  * A detecção é sempre acionada pelo usuário e retorna CANDIDATOS.
  * Nenhum campo é criado automaticamente.
- *
- * Exemplo de uso:
- *   const candidates = detectHorizontalLines(imageData, pageWidth, pageHeight, pageIndex)
  */
 
 import type { DetectionCandidate } from '../../types'
@@ -21,40 +21,60 @@ interface DetectionConfig {
   darknessThreshold: number
   /** Espessura máxima em pixels de uma linha (default 4). */
   maxLineThickness: number
+  /** Quantas linhas processar por fatia antes de ceder ao scheduler (default 80). */
+  rowsPerChunk: number
 }
 
 const DEFAULT_CONFIG: DetectionConfig = {
   minWidthRatio: 0.3,
   darknessThreshold: 80,
   maxLineThickness: 4,
+  rowsPerChunk: 80,
+}
+
+/**
+ * Cede ao main thread para não bloquear a UI.
+ * Usa scheduler.yield quando disponível (Chrome 115+), senão setTimeout 0.
+ */
+function yieldToMain(): Promise<void> {
+  if (typeof scheduler !== 'undefined' && 'yield' in scheduler) {
+    // @ts-expect-error — scheduler.yield ainda não tem tipos no TS
+    return scheduler.yield()
+  }
+  return new Promise(resolve => setTimeout(resolve, 0))
 }
 
 /**
  * Analisa os dados de imagem de um canvas e retorna candidatos de linha horizontal.
+ * É ASSÍNCRONA: cede ao main thread a cada `rowsPerChunk` linhas.
  *
  * @param imageData  - ImageData do canvas renderizado
  * @param pageIndex  - índice da página (0-based)
  * @param config     - parâmetros de detecção (opcional)
  */
-export function detectHorizontalLines(
+export async function detectHorizontalLines(
   imageData: ImageData,
   pageIndex: number,
   config: Partial<DetectionConfig> = {},
-): DetectionCandidate[] {
+): Promise<DetectionCandidate[]> {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const { width, height, data } = imageData
   const candidates: DetectionCandidate[] = []
   let idCounter = 0
 
-  // Percorre cada linha de pixels
+  // Percorre cada linha de pixels em chunks assíncronos
   for (let row = 0; row < height; row++) {
+    // Cede ao main thread a cada N linhas para não travar a UI
+    if (row > 0 && row % cfg.rowsPerChunk === 0) {
+      await yieldToMain()
+    }
+
     const darkRunLengths = findDarkRuns(data, row, width, cfg.darknessThreshold)
 
     for (const run of darkRunLengths) {
       const runWidthRatio = run.length / width
       if (runWidthRatio < cfg.minWidthRatio) continue
 
-      // Verifica se é uma linha fina (não um bloco preenchido)
       const isFineLine = isHorizontalLineThin(data, row, run.startX, run.length, width, height, cfg.maxLineThickness)
       if (!isFineLine) continue
 
@@ -112,7 +132,6 @@ function isHorizontalLineThin(
   totalHeight: number,
   maxThickness: number,
 ): boolean {
-  // Conta pixels escuros na coluna central acima e abaixo do ponto
   const midCol = startX + Math.floor(runLength / 2)
   let darkAbove = 0
   let darkBelow = 0
@@ -130,12 +149,11 @@ function isHorizontalLineThin(
     }
   }
 
-  // Linha fina: pouca acumulação de pixels escuros na vertical
   return darkAbove <= maxThickness && darkBelow <= maxThickness
 }
 
 /**
- * Mescla candidatos em linhas consecutivas (diferença < 5px de y relativo),
+ * Mescla candidatos em linhas consecutivas (diferença < 0.5% de y relativo),
  * evitando duplicatas da mesma linha física.
  */
 function mergeCandidatesNearby(candidates: DetectionCandidate[]): DetectionCandidate[] {
@@ -146,9 +164,7 @@ function mergeCandidatesNearby(candidates: DetectionCandidate[]): DetectionCandi
     const prev = merged[merged.length - 1]
     const curr = candidates[i]
     const yDiff = Math.abs(curr.position.y - prev.position.y)
-    // Considera a mesma linha se a diferença de y for menor que 0.5% da página
     if (yDiff < 0.005 && curr.pageIndex === prev.pageIndex) {
-      // Mantém o candidato mais largo
       if (curr.position.width > prev.position.width) {
         merged[merged.length - 1] = curr
       }

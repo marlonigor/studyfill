@@ -2,12 +2,15 @@
  * PDFCanvas: renderiza uma única página do PDF num elemento <canvas>.
  *
  * Emite onRenderComplete com o ImageData da página (usado pela detecção).
- * A escala (zoom) é aplicada via CSS, mantendo o canvas interno em
- * resolução nativa (devicePixelRatio) para nitidez.
+ * A escala (zoom) é aplicada multiplicada pelo devicePixelRatio para nitidez.
+ *
+ * Os callbacks onRenderComplete e onSizeChange são armazenados em refs para
+ * evitar que o useEffect principal re-execute a cada render do pai — o que
+ * causava loop infinito (render → setCanvasSize → re-render → render...).
  */
 
 import * as pdfjs from 'pdfjs-dist'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import styles from './PDFCanvas.module.css'
 
 interface PDFCanvasProps {
@@ -27,6 +30,13 @@ export function PDFCanvas({
 }: PDFCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const renderTaskRef = useRef<pdfjs.RenderTask | null>(null)
+
+  // Refs para callbacks: evitam que o effect de renderização reexecute
+  // quando o pai re-renderiza com funções novas mas semanticamente iguais.
+  const onRenderCompleteRef = useRef(onRenderComplete)
+  const onSizeChangeRef = useRef(onSizeChange)
+  useLayoutEffect(() => { onRenderCompleteRef.current = onRenderComplete }, [onRenderComplete])
+  useLayoutEffect(() => { onSizeChangeRef.current = onSizeChange }, [onSizeChange])
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -55,7 +65,7 @@ export function PDFCanvas({
       canvas.style.width = `${viewport.width / dpr}px`
       canvas.style.height = `${viewport.height / dpr}px`
 
-      onSizeChange?.(viewport.width / dpr, viewport.height / dpr)
+      onSizeChangeRef.current?.(viewport.width / dpr, viewport.height / dpr)
 
       const renderTask = page.render({ canvasContext: ctx, viewport })
       renderTaskRef.current = renderTask
@@ -64,7 +74,7 @@ export function PDFCanvas({
         await renderTask.promise
         if (!cancelled) {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-          onRenderComplete?.(imageData, canvas)
+          onRenderCompleteRef.current?.(imageData, canvas)
         }
       } catch (err) {
         // pdfjs-dist usa um objeto com .name === 'RenderingCancelledException'
@@ -83,7 +93,7 @@ export function PDFCanvas({
       cancelled = true
       renderTaskRef.current?.cancel()
     }
-  }, [pdfDoc, pageNumber, zoom, onRenderComplete, onSizeChange])
+  }, [pdfDoc, pageNumber, zoom]) // callbacks fora das deps — chegam via ref
 
   return <canvas ref={canvasRef} className={styles.canvas} />
 }
