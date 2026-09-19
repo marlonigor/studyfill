@@ -10,7 +10,7 @@
  * - Clique no box → ativa edição inline
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RelativePosition, TextBoxElement } from '../../types'
 import { pixelsToRelative, relativeToPixels } from '../../modules/elements/coordinates'
 import styles from './TextBoxLayer.module.css'
@@ -20,9 +20,17 @@ interface TextBoxLayerProps {
   pageIndex: number
   canvasWidth: number
   canvasHeight: number
-  onAdd: (position: RelativePosition) => void
+  isTextToolActive?: boolean
+  onAdd: (position: RelativePosition) => TextBoxElement | string | void
   onUpdate: (id: string, changes: Partial<Pick<TextBoxElement, 'content' | 'position'>>) => void
   onDelete: (id: string) => void
+}
+
+interface DrawingBox {
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
 }
 
 const MIN_BOX_WIDTH = 80
@@ -35,16 +43,19 @@ export function TextBoxLayer({
   pageIndex,
   canvasWidth,
   canvasHeight,
+  isTextToolActive = false,
   onAdd,
   onUpdate,
   onDelete,
 }: TextBoxLayerProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [drawingBox, setDrawingBox] = useState<DrawingBox | null>(null)
   const layerRef = useRef<HTMLDivElement>(null)
+  const isDrawingRef = useRef(false)
 
+  // ── Criação por duplo clique (atalho clássico permanente) ──────────────────
   const handleLayerDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Só cria se o duplo-clique for na área livre (não num TextBox existente)
       if ((e.target as HTMLElement).closest('[data-textbox]')) return
       const rect = layerRef.current?.getBoundingClientRect()
       if (!rect) return
@@ -58,20 +69,104 @@ export function TextBoxLayer({
         width: DEFAULT_BOX_WIDTH_RATIO,
         height: DEFAULT_BOX_HEIGHT_RATIO,
       }
-      onAdd(position)
+      const created = onAdd(position)
+      const createdId = typeof created === 'object' && created ? created.id : created
+      if (createdId) setActiveId(createdId)
     },
     [canvasWidth, canvasHeight, onAdd],
   )
+
+  // ── Ferramenta de Texto estilo Paint (clique e arrasto ou clique simples) ──
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isTextToolActive) return
+    if ((e.target as HTMLElement).closest('[data-textbox]')) return
+    if (e.button !== 0) return
+
+    const rect = layerRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
+    const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
+
+    isDrawingRef.current = true
+    setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y })
+  }, [isTextToolActive, canvasWidth, canvasHeight])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawingRef.current || !layerRef.current) return
+    const rect = layerRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
+    const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
+
+    setDrawingBox(prev => prev ? { ...prev, currentX: x, currentY: y } : null)
+  }, [canvasWidth, canvasHeight])
+
+  const handleMouseUp = useCallback(() => {
+    if (!isDrawingRef.current || !drawingBox) return
+    isDrawingRef.current = false
+
+    const rawW = Math.abs(drawingBox.currentX - drawingBox.startX)
+    const rawH = Math.abs(drawingBox.currentY - drawingBox.startY)
+    const left = Math.min(drawingBox.startX, drawingBox.currentX)
+    const top = Math.min(drawingBox.startY, drawingBox.currentY)
+
+    let wPx = rawW
+    let hPx = rawH
+
+    // Clique simples estilo Paint: cria tamanho padrão a partir do ponto clicado
+    if (rawW < 12 && rawH < 12) {
+      wPx = Math.max(MIN_BOX_WIDTH, canvasWidth * DEFAULT_BOX_WIDTH_RATIO)
+      hPx = Math.max(MIN_BOX_HEIGHT, canvasHeight * DEFAULT_BOX_HEIGHT_RATIO)
+    } else {
+      wPx = Math.max(MIN_BOX_WIDTH, rawW)
+      hPx = Math.max(MIN_BOX_HEIGHT, rawH)
+    }
+
+    const xPx = Math.max(0, Math.min(left, canvasWidth - wPx))
+    const yPx = Math.max(0, Math.min(top, canvasHeight - hPx))
+
+    const relPos = pixelsToRelative(
+      { x: xPx, y: yPx, width: wPx, height: hPx },
+      canvasWidth,
+      canvasHeight,
+    )
+
+    const created = onAdd(relPos)
+    const createdId = typeof created === 'object' && created ? created.id : created
+    if (createdId) {
+      setActiveId(createdId)
+    }
+
+    setDrawingBox(null)
+  }, [drawingBox, canvasWidth, canvasHeight, onAdd])
 
   const pageElements = elements.filter(el => el.pageIndex === pageIndex)
 
   return (
     <div
       ref={layerRef}
-      className={styles.layer}
+      className={`${styles.layer} ${isTextToolActive ? styles.layerActiveTool : ''}`}
       style={{ width: canvasWidth, height: canvasHeight }}
       onDoubleClick={handleLayerDoubleClick}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
     >
+      {/* Preview retangular enquanto o usuário arrasta estilo Paint */}
+      {drawingBox && (
+        <div
+          className={styles.drawingPreview}
+          style={{
+            left: Math.min(drawingBox.startX, drawingBox.currentX),
+            top: Math.min(drawingBox.startY, drawingBox.currentY),
+            width: Math.max(MIN_BOX_WIDTH, Math.abs(drawingBox.currentX - drawingBox.startX)),
+            height: Math.max(MIN_BOX_HEIGHT, Math.abs(drawingBox.currentY - drawingBox.startY)),
+          }}
+        >
+          <span className={styles.drawingHint}>Texto</span>
+        </div>
+      )}
+
       {pageElements.map(el => (
         <TextBoxItem
           key={el.id}
@@ -115,6 +210,13 @@ function TextBoxItem({
   const px = relativeToPixels(element.position, canvasWidth, canvasHeight)
   const dragRef = useRef<{ startMouseX: number; startMouseY: number; startX: number; startY: number } | null>(null)
   const resizeRef = useRef<{ startMouseX: number; startMouseY: number; startW: number; startH: number } | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (isActive) {
+      textareaRef.current?.focus()
+    }
+  }, [isActive])
 
   // ── Drag ──
   const handleDragMouseDown = (e: React.MouseEvent) => {
@@ -180,6 +282,7 @@ function TextBoxItem({
 
       {/* Textarea de conteúdo */}
       <textarea
+        ref={textareaRef}
         className={styles.textarea}
         value={element.content}
         placeholder="Digite aqui..."

@@ -8,7 +8,7 @@
  * Orquestra: importação, persistência, exportação e navegação.
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CandidateHighlight } from './components/CandidateHighlight/CandidateHighlight'
 import { DetectionPanel } from './components/DetectionPanel/DetectionPanel'
 import { DocumentList } from './components/DocumentList/DocumentList'
@@ -43,6 +43,7 @@ export default function App() {
   const [isDetecting, setIsDetecting] = useState(false)
   const [detectionProgress, setDetectionProgress] = useState(0)
   const [hasAttemptedDetection, setHasAttemptedDetection] = useState(false)
+  const [isTextToolActive, setIsTextToolActive] = useState(false)
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -258,6 +259,34 @@ export default function App() {
     setCandidates(prev => prev.filter(c => c.id !== id))
   }
 
+  // ── Atalhos de teclado (T para ferramenta de texto, Esc para cancelar) ───
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      const isInput =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        (activeEl as HTMLElement)?.isContentEditable
+
+      if (e.key === 'Escape') {
+        if (isTextToolActive) {
+          setIsTextToolActive(false)
+        } else if (showDetection) {
+          setShowDetection(false)
+        }
+        return
+      }
+
+      if (!isInput && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault()
+        setIsTextToolActive(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isTextToolActive, showDetection])
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -299,6 +328,8 @@ export default function App() {
             isSaving={isSaving}
             isExporting={isExporting}
             hasDocument={!!pdfDoc}
+            isTextToolActive={isTextToolActive}
+            onToggleTextTool={() => setIsTextToolActive(prev => !prev)}
             onImport={handleImportClick}
             onSave={handleSave}
             onExport={handleExport}
@@ -352,6 +383,7 @@ export default function App() {
                       pageIndex={currentPage - 1}
                       canvasWidth={canvasSize.w}
                       canvasHeight={canvasSize.h}
+                      isTextToolActive={isTextToolActive}
                       onAdd={pos => addTextBox(currentPage - 1, pos)}
                       onUpdate={updateTextBox}
                       onDelete={deleteTextBox}

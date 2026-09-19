@@ -94,6 +94,13 @@
   cursor: not-allowed;
 }
 
+.btnToolActive {
+  background: rgba(99, 102, 241, 0.25) !important;
+  color: #c7d2fe !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
 .btnIcon {
   background: rgba(255, 255, 255, 0.06);
   color: #e2e8f0;

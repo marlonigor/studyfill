@@ -14,6 +14,8 @@ interface ToolbarProps {
   isSaving: boolean
   isExporting: boolean
   hasDocument: boolean
+  isTextToolActive?: boolean
+  onToggleTextTool?: () => void
   onImport: () => void
   onSave: () => void
   onExport: () => void
@@ -32,6 +34,8 @@ export function Toolbar({
   isSaving,
   isExporting,
   hasDocument,
+  isTextToolActive = false,
+  onToggleTextTool,
   onImport,
   onSave,
   onExport,
@@ -96,6 +100,36 @@ export function Toolbar({
             {Math.round(zoom * 100)}%
           </button>
           <button id="btn-zoom-in" className={styles.btnIcon} onClick={onZoomIn} aria-label="Aumentar zoom">＋</button>
+        </div>
+      )}
+
+      {/* Ferramentas de edição */}
+      {hasDocument && (
+        <div className={styles.group}>
+          <button
+            id="btn-tool-text"
+            className={`${styles.btnSecondary} ${isTextToolActive ? styles.btnToolActive : ''}`}
+            onClick={onToggleTextTool}
+            title="Inserir Caixa de Texto (clique ou arraste no documento)"
+            aria-pressed={isTextToolActive}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="4 7 4 4 20 4 20 7" />
+              <line x1="9" y1="20" x2="15" y2="20" />
+              <line x1="12" y1="4" x2="12" y2="20" />
+            </svg>
+            <span>Texto</span>
+          </button>
         </div>
       )}
 
