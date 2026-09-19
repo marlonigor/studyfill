@@ -1,24 +1,32 @@
 /**
- * App principal do StudyFill.
+ * App principal do EstudoPDF.
  *
- * Roteamento simples via estado React (sem react-router no MVP):
- * - 'list'   → DocumentList (tela inicial)
- * - 'editor' → Editor (visualizador + camada de edição)
+ * Design System: Scholar Script (Editorial Minimalism + Digital Paper Craft)
  *
- * Orquestra: importação, persistência, exportação e navegação.
+ * Orquestra as 3 telas principais do MVP:
+ * - Tela 1 (list): DocumentList (Início & Recentes)
+ * - Tela 2 (editor): Visualizador de PDF com Toolbar, PDFCanvas, TextBoxLayer e DetectionPanel
+ * - Tela 3 (modal): ExportModal (Confirmação de Exportação com integridade do original)
+ *
+ * Zero emojis em todo o sistema.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateHighlight } from './components/CandidateHighlight/CandidateHighlight'
 import { DetectionPanel } from './components/DetectionPanel/DetectionPanel'
 import { DocumentList } from './components/DocumentList/DocumentList'
+import { ExportModal } from './components/ExportModal/ExportModal'
 import { PDFCanvas } from './components/PDFCanvas/PDFCanvas'
 import { TextBoxLayer } from './components/TextBoxLayer/TextBoxLayer'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { useElements } from './hooks/useElements'
 import { usePdfViewer } from './hooks/usePdfViewer'
 import { detectHorizontalLines } from './modules/detection/lineDetector'
-import { downloadPdf, exportDocument } from './modules/export/pdfExporter'
+import {
+  downloadPdf,
+  exportDocument,
+  type ExportOptions,
+} from './modules/export/pdfExporter'
 import {
   loadDocument,
   openDatabase,
@@ -38,6 +46,7 @@ export default function App() {
   const [currentDoc, setCurrentDoc] = useState<StudyDocument | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [showDetection, setShowDetection] = useState(false)
   const [candidates, setCandidates] = useState<DetectionCandidate[]>([])
   const [isDetecting, setIsDetecting] = useState(false)
@@ -80,18 +89,10 @@ export default function App() {
     setTimeout(() => setSuccessMsg(null), 3000)
   }
 
-  // ── Importação ───────────────────────────────────────────────────────────
+  // ── Processamento comum de importação de arquivo ─────────────────────────
 
-  const handleImportClick = () => fileInputRef.current?.click()
-
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (!e.target) return
-      // Reset do input para permitir reimportar o mesmo arquivo
-      e.target.value = ''
-
-      if (!file) return
+  const processImportFile = useCallback(
+    async (file: File) => {
       if (!file.name.toLowerCase().endsWith('.pdf')) {
         showError('O arquivo selecionado não é um PDF válido.')
         return
@@ -125,6 +126,20 @@ export default function App() {
     [loadPdf, loadEditLayer],
   )
 
+  const handleImportClick = () => fileInputRef.current?.click()
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!e.target) return
+      e.target.value = ''
+      if (file) {
+        await processImportFile(file)
+      }
+    },
+    [processImportFile],
+  )
+
   // ── Abrir documento salvo ────────────────────────────────────────────────
 
   const handleOpenDocument = useCallback(
@@ -132,7 +147,10 @@ export default function App() {
       try {
         const db = await openDatabase()
         const doc = await loadDocument(db, id)
-        if (!doc) { showError('Documento não encontrado.'); return }
+        if (!doc) {
+          showError('Documento não encontrado.')
+          return
+        }
 
         await loadPdf(doc.originalPdfBuffer)
         setCurrentDoc(doc)
@@ -147,6 +165,12 @@ export default function App() {
     [loadPdf, loadEditLayer],
   )
 
+  // ── Renomear documento ───────────────────────────────────────────────────
+
+  const handleRenameDocument = useCallback((newName: string) => {
+    setCurrentDoc(prev => (prev ? { ...prev, name: newName } : null))
+  }, [])
+
   // ── Salvar ───────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
@@ -160,7 +184,7 @@ export default function App() {
       const db = await openDatabase()
       await saveDocument(db, docToSave)
       setCurrentDoc(docToSave)
-      showSuccess('Progresso salvo!')
+      showSuccess('Progresso salvo com sucesso!')
     } catch {
       showError('Erro ao salvar. Tente novamente.')
     } finally {
@@ -168,24 +192,45 @@ export default function App() {
     }
   }, [currentDoc, editLayer])
 
-  // ── Exportar ─────────────────────────────────────────────────────────────
+  // ── Exportação com opções da Tela 3 ──────────────────────────────────────
 
-  const handleExport = useCallback(async () => {
-    if (!currentDoc) return
-    setIsExporting(true)
-    try {
-      const docToExport: StudyDocument = { ...currentDoc, editLayer }
-      const bytes = await exportDocument(docToExport)
-      downloadPdf(bytes, `${currentDoc.name}_preenchido`)
-      showSuccess('PDF exportado com sucesso!')
-    } catch {
-      showError('Erro ao exportar o PDF.')
-    } finally {
-      setIsExporting(false)
-    }
-  }, [currentDoc, editLayer])
+  const handleExportConfirm = useCallback(
+    async (filename: string, options: ExportOptions) => {
+      if (!currentDoc) return
+      setIsExporting(true)
+      try {
+        const docToExport: StudyDocument = { ...currentDoc, editLayer }
+        const bytes = await exportDocument(docToExport, options)
+        downloadPdf(bytes, filename)
+        setIsExportModalOpen(false)
+        showSuccess('PDF exportado com sucesso!')
+      } catch {
+        showError('Erro ao exportar o PDF.')
+      } finally {
+        setIsExporting(false)
+      }
+    },
+    [currentDoc, editLayer],
+  )
 
-  // ── Zoom — functional updates para não capturar zoom/page obsoletos ───────
+  // ── Métricas para a Tela 3 ───────────────────────────────────────────────
+
+  const answeredPagesCount = useMemo(() => {
+    const answeredIndices = new Set(
+      editLayer.elements
+        .filter(el => el.type === 'textbox' && el.content.trim().length > 0)
+        .map(el => el.pageIndex),
+    )
+    return answeredIndices.size
+  }, [editLayer.elements])
+
+  const filledElementsCount = useMemo(() => {
+    return editLayer.elements.filter(
+      el => el.type === 'textbox' && el.content.trim().length > 0,
+    ).length
+  }, [editLayer.elements])
+
+  // ── Zoom ─────────────────────────────────────────────────────────────────
 
   const handleZoomIn = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, z + ZOOM_STEP)), [])
   const handleZoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, z - ZOOM_STEP)), [])
@@ -210,9 +255,7 @@ export default function App() {
     resetDetection()
   }, [totalPages, resetDetection])
 
-  // ── Callbacks estáveis para PDFCanvas ────────────────────────────────────
-  // Precisam ser estáveis para que o useLayoutEffect no PDFCanvas não execute
-  // desnecessariamente. Não têm deps além das refs — atualizamos via ref lá.
+  // ── Callbacks para o PDFCanvas ───────────────────────────────────────────
 
   const handleRenderComplete = useCallback(
     (imageData: ImageData, canvas: HTMLCanvasElement) => {
@@ -226,7 +269,7 @@ export default function App() {
     setCanvasSize({ w, h })
   }, [])
 
-  // ── Detecção (assíncrona para não travar a UI) ────────────────────────────
+  // ── Detecção inteligente ─────────────────────────────────────────────────
 
   const handleDetect = useCallback(async () => {
     if (!lastImageDataRef.current) return
@@ -250,7 +293,9 @@ export default function App() {
   const handleAcceptCandidate = useCallback(
     (candidate: DetectionCandidate) => {
       acceptCandidate(candidate.pageIndex, candidate.position)
-      setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, accepted: true } : c))
+      setCandidates(prev =>
+        prev.map(c => (c.id === candidate.id ? { ...c, accepted: true } : c)),
+      )
     },
     [acceptCandidate],
   )
@@ -259,7 +304,8 @@ export default function App() {
     setCandidates(prev => prev.filter(c => c.id !== id))
   }
 
-  // ── Atalhos de teclado (T para ferramenta de texto, Esc para cancelar) ───
+  // ── Atalhos de teclado globais ───────────────────────────────────────────
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement
@@ -268,8 +314,11 @@ export default function App() {
         activeEl?.tagName === 'TEXTAREA' ||
         (activeEl as HTMLElement)?.isContentEditable
 
+      // Esc para fechar modal ou detecção ou ferramenta de texto
       if (e.key === 'Escape') {
-        if (isTextToolActive) {
+        if (isExportModalOpen) {
+          setIsExportModalOpen(false)
+        } else if (isTextToolActive) {
           setIsTextToolActive(false)
         } else if (showDetection) {
           setShowDetection(false)
@@ -277,15 +326,60 @@ export default function App() {
         return
       }
 
-      if (!isInput && (e.key === 't' || e.key === 'T')) {
+      // Ctrl+O / Cmd+O: abrir arquivo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) {
         e.preventDefault()
-        setIsTextToolActive(prev => !prev)
+        handleImportClick()
+        return
+      }
+
+      // Ctrl+S / Cmd+S: salvar documento ativo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        if (screen === 'editor' && currentDoc) {
+          e.preventDefault()
+          handleSave()
+          return
+        }
+      }
+
+      // Ctrl+E / Cmd+E: abrir modal de exportação
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
+        if (screen === 'editor' && currentDoc) {
+          e.preventDefault()
+          setIsExportModalOpen(true)
+          return
+        }
+      }
+
+      // Tecla T: ferramenta de texto (quando não estiver digitando em campo)
+      if (!isInput && (e.key === 't' || e.key === 'T')) {
+        if (screen === 'editor') {
+          e.preventDefault()
+          setIsTextToolActive(prev => !prev)
+        }
+        return
+      }
+
+      // Tecla V: modo seleção
+      if (!isInput && (e.key === 'v' || e.key === 'V')) {
+        if (screen === 'editor') {
+          e.preventDefault()
+          setIsTextToolActive(false)
+        }
+        return
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isTextToolActive, showDetection])
+  }, [
+    isExportModalOpen,
+    isTextToolActive,
+    showDetection,
+    screen,
+    currentDoc,
+    handleSave,
+  ])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -315,13 +409,22 @@ export default function App() {
         </div>
       )}
 
+      {/* Tela 1: Início & Recentes */}
       {screen === 'list' && (
-        <DocumentList onOpen={handleOpenDocument} onImport={handleImportClick} />
+        <DocumentList
+          onOpen={handleOpenDocument}
+          onImport={handleImportClick}
+          onImportFile={processImportFile}
+        />
       )}
 
+      {/* Tela 2: Editor de PDF */}
       {screen === 'editor' && (
         <div className={styles.editorLayout}>
           <Toolbar
+            documentName={currentDoc?.name}
+            onRenameDocument={handleRenameDocument}
+            onBack={() => setScreen('list')}
             currentPage={currentPage}
             totalPages={totalPages}
             zoom={zoom}
@@ -332,13 +435,14 @@ export default function App() {
             onToggleTextTool={() => setIsTextToolActive(prev => !prev)}
             onImport={handleImportClick}
             onSave={handleSave}
-            onExport={handleExport}
+            onExport={() => setIsExportModalOpen(true)}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onZoomReset={handleZoomReset}
             onPrevPage={handlePrevPage}
             onNextPage={handleNextPage}
             onOpenDetection={() => setShowDetection(true)}
+            detectedCount={candidates.filter(c => !c.accepted).length}
           />
 
           <div className={styles.workspace}>
@@ -359,7 +463,7 @@ export default function App() {
               </aside>
             )}
 
-            {/* Área principal de edição */}
+            {/* Palco central do PDF */}
             <div className={styles.canvasArea}>
               {isLoading && (
                 <div className={styles.loadingOverlay}>
@@ -403,12 +507,26 @@ export default function App() {
                 <div className={styles.placeholder}>
                   <p>Nenhum documento carregado.</p>
                   <button className={styles.backBtn} onClick={() => setScreen('list')}>
-                    ← Voltar à lista
+                    Voltar à lista
                   </button>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Tela 3: Modal de Confirmação de Exportação */}
+          {currentDoc && (
+            <ExportModal
+              isOpen={isExportModalOpen}
+              documentName={currentDoc.name}
+              totalPages={totalPages}
+              answeredPagesCount={answeredPagesCount}
+              elementsCount={filledElementsCount}
+              isExporting={isExporting}
+              onClose={() => setIsExportModalOpen(false)}
+              onConfirmExport={handleExportConfirm}
+            />
+          )}
         </div>
       )}
     </div>

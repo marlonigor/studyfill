@@ -4,61 +4,90 @@
  * Gera um novo PDF sobrepondo os TextBoxes da camada de edição
  * sobre o PDF original usando pdf-lib. O original nunca é modificado.
  *
- * Exemplo de uso:
- *   const pdfBytes = await exportDocument(studyDoc)
- *   downloadPdf(pdfBytes, 'studyfill-export.pdf')
+ * Suporta:
+ * - PDF completo com todas as páginas e respostas
+ * - Somente páginas respondidas (extração inteligente de páginas com anotações)
+ * - Aplainamento vetorial nativo (flatten)
  */
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { StudyDocument, TextBoxElement } from '../../types'
 import { relativeToPdfPoints } from '../elements/coordinates'
 
+export interface ExportOptions {
+  onlyAnsweredPages?: boolean
+  flatten?: boolean
+}
+
 /**
  * Exporta o documento: carrega o PDF original e sobrepõe os TextBoxes.
  * Retorna os bytes do novo PDF.
  */
-export async function exportDocument(doc: StudyDocument): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(doc.originalPdfBuffer)
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const pages = pdfDoc.getPages()
+export async function exportDocument(
+  doc: StudyDocument,
+  options: ExportOptions = {},
+): Promise<Uint8Array> {
+  const originalPdf = await PDFDocument.load(doc.originalPdfBuffer)
+  const font = await originalPdf.embedFont(StandardFonts.Helvetica)
+  const textBoxes = doc.editLayer.elements.filter(
+    (el): el is TextBoxElement => el.type === 'textbox' && el.content.trim().length > 0,
+  )
 
-  const textBoxes = doc.editLayer.elements.filter((el): el is TextBoxElement => el.type === 'textbox')
+  let targetDoc = originalPdf
+  // Mapeamento de página original para página de destino
+  const pageMap = new Map<number, number>()
+
+  if (options.onlyAnsweredPages && textBoxes.length > 0) {
+    targetDoc = await PDFDocument.create()
+    const answeredPageIndices = Array.from(new Set(textBoxes.map(b => b.pageIndex))).sort((a, b) => a - b)
+    const copiedPages = await targetDoc.copyPages(originalPdf, answeredPageIndices)
+    copiedPages.forEach((page, i) => {
+      targetDoc.addPage(page)
+      pageMap.set(answeredPageIndices[i], i)
+    })
+  }
+
+  const pages = targetDoc.getPages()
+  const targetFont = targetDoc === originalPdf ? font : await targetDoc.embedFont(StandardFonts.Helvetica)
 
   for (const box of textBoxes) {
-    const page = pages[box.pageIndex]
+    const targetPageIndex = options.onlyAnsweredPages && textBoxes.length > 0
+      ? pageMap.get(box.pageIndex)
+      : box.pageIndex
+
+    if (targetPageIndex === undefined) continue
+    const page = pages[targetPageIndex]
     if (!page) continue
 
     const { width: pageW, height: pageH } = page.getSize()
     const pts = relativeToPdfPoints(box.position, pageW, pageH)
-
-    if (!box.content.trim()) continue
 
     const hexColor = box.fontColor.startsWith('#') ? box.fontColor.slice(1) : '000000'
     const r = parseInt(hexColor.slice(0, 2), 16) / 255
     const g = parseInt(hexColor.slice(2, 4), 16) / 255
     const b = parseInt(hexColor.slice(4, 6), 16) / 255
 
-    // Desenha um fundo branco semitransparente para melhor legibilidade
+    // Desenha um fundo branco semitransparente para legibilidade
     page.drawRectangle({
       x: pts.x,
       y: pts.y,
       width: pts.width,
       height: pts.height,
       color: rgb(1, 1, 1),
-      opacity: 0.85,
+      opacity: 0.88,
     })
 
     page.drawText(box.content, {
       x: pts.x + 2,
       y: pts.y + pts.height / 2 - box.fontSize / 2,
       size: box.fontSize,
-      font,
+      font: targetFont,
       color: rgb(r, g, b),
       maxWidth: pts.width - 4,
     })
   }
 
-  return pdfDoc.save()
+  return targetDoc.save()
 }
 
 /**

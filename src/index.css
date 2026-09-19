@@ -1,6 +1,4 @@
-/* StudyFill — Global CSS Reset + Design System */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* EstudoPDF — Scholar Script Design System (Editorial Minimalism + Digital Paper Craft) */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -9,15 +7,55 @@
 }
 
 :root {
-  /* Paleta indigo/violet dark */
-  --color-bg: #0a0a1a;
-  --color-surface: #0f0f28;
-  --color-border: rgba(255, 255, 255, 0.07);
-  --color-text: #e2e8f0;
+  /* Superfícies & Backgrounds */
+  --color-surface: #f9f9ff;
+  --color-surface-dim: #cfdaf2;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f3ff;
+  --color-surface-container: #e6ebfc;
+  --color-surface-container-high: #dce4f8;
+  --color-surface-container-highest: #d0daf2;
+
+  /* Cores Primárias e Ações */
+  --color-primary: #4355b9;
+  --color-primary-container: #4f46e5;
+  --color-on-primary: #ffffff;
+  --color-primary-light: #eef2ff;
+  --color-primary-hover: #3747a6;
+
+  /* Status e Ações Especiais */
+  --color-state-saved: #16a34a;
+  --color-state-detection: #d97706;
+  --color-state-detection-bg: #fef3c7;
+  --color-state-danger: #dc2626;
+  --color-state-danger-bg: #fee2e2;
+  --color-accent-badge: #2563eb;
+
+  /* Textos e Tipografia */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
   --color-text-muted: #94a3b8;
-  --color-primary: #6366f1;
-  --color-primary-light: #818cf8;
-  --color-accent: #c4b5fd;
+  --color-text-tertiary: #64748b;
+
+  /* Bordas e Contornos */
+  --border-hairline: rgba(15, 23, 42, 0.08);
+  --border-subtle: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.2);
+
+  /* Famílias Tipográficas */
+  --font-serif: 'Source Serif 4', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Elevações & Sombras */
+  --shadow-e1: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-e2: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  --shadow-e3: 0 20px 35px -10px rgba(15, 23, 42, 0.16);
+
+  /* Transições suaves */
+  --transition-fast: 0.12s ease-in-out;
+  --transition-normal: 0.2s ease-in-out;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -30,25 +68,27 @@ html {
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--font-sans);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 h1, h2, h3, h4 {
-  line-height: 1.2;
-  font-weight: 700;
+  font-family: var(--font-serif);
+  color: var(--color-text-primary);
+  line-height: 1.25;
 }
 
-button {
-  font-family: inherit;
+button, input, textarea, select {
+  font-family: var(--font-sans);
 }
 
+/* Scrollbars discretos estilo papel */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -56,16 +96,16 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
-  border-radius: 3px;
+  background: rgba(67, 85, 185, 0.2);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
+  background: rgba(67, 85, 185, 0.38);
 }
 
-/* Seleção de texto com cor do sistema */
+/* Seleção de texto acadêmica */
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
-  color: #e2e8f0;
+  background: rgba(79, 70, 229, 0.2);
+  color: #0f172a;
 }
