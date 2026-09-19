@@ -570,13 +570,16 @@ export default function App() {
                       isTextToolActive={isTextToolActive}
                       selectedId={selectedBoxId}
                       onSelectElement={handleSelectElement}
-                      onAdd={pos =>
-                        addTextBox(currentPage - 1, pos, {
+                      onAdd={(pos, customFontSize) => {
+                        if (customFontSize) {
+                          setActiveFontSize(customFontSize)
+                        }
+                        return addTextBox(currentPage - 1, pos, {
                           fontFamily: activeFontFamily,
-                          fontSize: activeFontSize,
+                          fontSize: customFontSize ?? activeFontSize,
                           fontColor: activeFontColor,
                         })
-                      }
+                      }}
                       onUpdate={updateTextBox}
                       onDelete={id => {
                         deleteTextBox(id)

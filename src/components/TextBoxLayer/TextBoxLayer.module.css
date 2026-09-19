@@ -1,28 +1,32 @@
-/* TextBoxLayer.module.css — Scholar Script Digital Paper Craft */
-
 .layer {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none; /* camada passante por padrão */
+  z-index: 5;
 }
 
 .layerActiveTool {
   pointer-events: all !important;
   cursor: crosshair !important;
+  z-index: 25 !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .drawingPreview {
   position: absolute;
   border: 1.5px dashed var(--color-primary-container);
   border-radius: 4px;
-  background-color: rgba(79, 70, 229, 0.08);
-  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.15);
+  background-color: rgba(79, 70, 229, 0.09);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.18);
   pointer-events: none;
-  z-index: 25;
+  z-index: 30;
   display: flex;
-  align-items: flex-start;
-  padding: 4px 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  box-sizing: border-box;
 }
 
 .drawingHint {
@@ -30,6 +34,18 @@
   font-weight: 600;
   color: var(--color-primary);
   font-family: var(--font-sans);
+  user-select: none;
+}
+
+.drawingSizeBadge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-primary-hover);
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
   user-select: none;
 }
 

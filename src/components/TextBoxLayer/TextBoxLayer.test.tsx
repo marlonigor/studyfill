@@ -2,6 +2,7 @@
  * Testes unitários do TextBoxLayer.
  *
  * Princípios F.I.R.S.T.: testes rápidos, isolados e determinísticos.
+ * Zero emojis em mensagens e asserções.
  */
 
 import '@testing-library/jest-dom/vitest'
@@ -19,6 +20,7 @@ describe('TextBoxLayer', () => {
     content: 'Texto de teste',
     fontSize: 14,
     fontColor: '#000000',
+    fontFamily: 'Inter',
   }
 
   it('renderiza os elementos da página atual', () => {
@@ -64,7 +66,7 @@ describe('TextBoxLayer', () => {
     )
   })
 
-  it('cria caixa de texto com clique simples quando a ferramenta de texto está ativa (estilo Paint)', () => {
+  it('cria caixa de texto com clique simples quando a ferramenta de texto está ativa', () => {
     const onAdd = vi.fn()
     const { container } = render(
       <TextBoxLayer
@@ -81,12 +83,12 @@ describe('TextBoxLayer', () => {
 
     const layer = container.firstChild as HTMLElement
     fireEvent.mouseDown(layer, { clientX: 100, clientY: 150, button: 0 })
-    fireEvent.mouseUp(layer)
+    fireEvent.mouseUp(window)
 
     expect(onAdd).toHaveBeenCalledTimes(1)
   })
 
-  it('cria caixa de texto proporcional ao arrasto quando a ferramenta de texto está ativa (estilo Paint)', () => {
+  it('adapta o tamanho da letra proporcionalmente ao tamanho da seleção arrastada', () => {
     const onAdd = vi.fn()
     const { container } = render(
       <TextBoxLayer
@@ -103,8 +105,8 @@ describe('TextBoxLayer', () => {
 
     const layer = container.firstChild as HTMLElement
     fireEvent.mouseDown(layer, { clientX: 50, clientY: 50, button: 0 })
-    fireEvent.mouseMove(layer, { clientX: 250, clientY: 150 })
-    fireEvent.mouseUp(layer)
+    fireEvent.mouseMove(window, { clientX: 250, clientY: 150 })
+    fireEvent.mouseUp(window, { clientX: 250, clientY: 150 })
 
     expect(onAdd).toHaveBeenCalledTimes(1)
     expect(onAdd).toHaveBeenCalledWith(
@@ -112,7 +114,12 @@ describe('TextBoxLayer', () => {
         width: expect.closeTo(200 / 800, 2),
         height: expect.closeTo(100 / 1000, 2),
       }),
+      expect.any(Number),
     )
+
+    // Altura 100px -> fonte calculada próxima a 64px
+    const passedFontSize = onAdd.mock.calls[0][1]
+    expect(passedFontSize).toBeGreaterThanOrEqual(14)
   })
 
   it('exclui a caixa de texto ao clicar no botão de excluir', () => {

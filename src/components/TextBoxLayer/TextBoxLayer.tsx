@@ -24,7 +24,7 @@ interface TextBoxLayerProps {
   isTextToolActive?: boolean
   selectedId?: string | null
   onSelectElement?: (element: TextBoxElement | null) => void
-  onAdd: (position: RelativePosition) => TextBoxElement | string | void
+  onAdd: (position: RelativePosition, calculatedFontSize?: number) => TextBoxElement | string | void
   onUpdate: (
     id: string,
     changes: Partial<Pick<TextBoxElement, 'content' | 'position' | 'fontSize' | 'fontColor' | 'fontFamily'>>,
@@ -102,78 +102,88 @@ export function TextBoxLayer({
     [canvasWidth, canvasHeight, onAdd, elements, onSelectElement],
   )
 
-  // ── Ferramenta de Texto: clique e arrasto ou clique simples onde quiser ───
+  // ── Ferramenta de Texto: seleção por arrasto livre com adaptação de fonte ──
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isTextToolActive) return
       if ((e.target as HTMLElement).closest('[data-textbox]')) return
       if (e.button !== 0) return
 
+      e.preventDefault()
+
       const rect = layerRef.current?.getBoundingClientRect()
       if (!rect) return
 
-      const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
-      const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
+      const startX = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
+      const startY = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
 
       isDrawingRef.current = true
-      setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y })
-    },
-    [isTextToolActive, canvasWidth, canvasHeight],
-  )
+      setDrawingBox({ startX, startY, currentX: startX, currentY: startY })
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isDrawingRef.current || !layerRef.current) return
-      const rect = layerRef.current.getBoundingClientRect()
-      const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
-      const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
-
-      setDrawingBox(prev => (prev ? { ...prev, currentX: x, currentY: y } : null))
-    },
-    [canvasWidth, canvasHeight],
-  )
-
-  const handleMouseUp = useCallback(() => {
-    if (!isDrawingRef.current || !drawingBox) return
-    isDrawingRef.current = false
-
-    const rawW = Math.abs(drawingBox.currentX - drawingBox.startX)
-    const rawH = Math.abs(drawingBox.currentY - drawingBox.startY)
-    const left = Math.min(drawingBox.startX, drawingBox.currentX)
-    const top = Math.min(drawingBox.startY, drawingBox.currentY)
-
-    let wPx = rawW
-    let hPx = rawH
-
-    // Clique simples: cria caixa de texto pronta no ponto clicado
-    if (rawW < 12 && rawH < 12) {
-      wPx = Math.max(MIN_BOX_WIDTH, canvasWidth * DEFAULT_BOX_WIDTH_RATIO)
-      hPx = Math.max(MIN_BOX_HEIGHT, canvasHeight * DEFAULT_BOX_HEIGHT_RATIO)
-    } else {
-      wPx = Math.max(MIN_BOX_WIDTH, rawW)
-      hPx = Math.max(MIN_BOX_HEIGHT, rawH)
-    }
-
-    const xPx = Math.max(0, Math.min(left, canvasWidth - wPx))
-    const yPx = Math.max(0, Math.min(top, canvasHeight - hPx))
-
-    const relPos = pixelsToRelative(
-      { x: xPx, y: yPx, width: wPx, height: hPx },
-      canvasWidth,
-      canvasHeight,
-    )
-
-    const created = onAdd(relPos)
-    const createdId = typeof created === 'object' && created ? created.id : created
-    if (createdId) {
-      setInternalActiveId(createdId)
-      if (typeof created === 'object' && created) {
-        onSelectElement?.(created)
+      const onMove = (ev: MouseEvent) => {
+        if (!isDrawingRef.current || !layerRef.current) return
+        const currentRect = layerRef.current.getBoundingClientRect()
+        const x = Math.max(0, Math.min(canvasWidth, ev.clientX - currentRect.left))
+        const y = Math.max(0, Math.min(canvasHeight, ev.clientY - currentRect.top))
+        setDrawingBox({ startX, startY, currentX: x, currentY: y })
       }
-    }
 
-    setDrawingBox(null)
-  }, [drawingBox, canvasWidth, canvasHeight, onAdd, onSelectElement])
+      const onUp = (ev: MouseEvent) => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        if (!isDrawingRef.current || !layerRef.current) return
+        isDrawingRef.current = false
+
+        const currentRect = layerRef.current.getBoundingClientRect()
+        const endX = Math.max(0, Math.min(canvasWidth, ev.clientX - currentRect.left))
+        const endY = Math.max(0, Math.min(canvasHeight, ev.clientY - currentRect.top))
+
+        const rawW = Math.abs(endX - startX)
+        const rawH = Math.abs(endY - startY)
+        const left = Math.min(startX, endX)
+        const top = Math.min(startY, endY)
+
+        let wPx = rawW
+        let hPx = rawH
+
+        // Clique simples: cria caixa de tamanho padrão proporcional
+        if (rawW < 12 && rawH < 12) {
+          wPx = Math.max(MIN_BOX_WIDTH, canvasWidth * DEFAULT_BOX_WIDTH_RATIO)
+          hPx = Math.max(MIN_BOX_HEIGHT, canvasHeight * DEFAULT_BOX_HEIGHT_RATIO)
+        } else {
+          wPx = Math.max(MIN_BOX_WIDTH, rawW)
+          hPx = Math.max(MIN_BOX_HEIGHT, rawH)
+        }
+
+        const xPx = Math.max(0, Math.min(left, canvasWidth - wPx))
+        const yPx = Math.max(0, Math.min(top, canvasHeight - hPx))
+
+        // Adaptação proporcional do tamanho da letra à altura da seleção feita
+        const calculatedFontSize = Math.max(10, Math.min(72, Math.round(Math.max(14, hPx - 8) * 0.7)))
+
+        const relPos = pixelsToRelative(
+          { x: xPx, y: yPx, width: wPx, height: hPx },
+          canvasWidth,
+          canvasHeight,
+        )
+
+        const created = onAdd(relPos, calculatedFontSize)
+        const createdId = typeof created === 'object' && created ? created.id : created
+        if (createdId) {
+          setInternalActiveId(createdId)
+          if (typeof created === 'object' && created) {
+            onSelectElement?.(created)
+          }
+        }
+
+        setDrawingBox(null)
+      }
+
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+    [isTextToolActive, canvasWidth, canvasHeight, onAdd, onSelectElement],
+  )
 
   const pageElements = elements.filter(el => el.pageIndex === pageIndex)
 
@@ -184,23 +194,27 @@ export function TextBoxLayer({
       style={{ width: canvasWidth, height: canvasHeight }}
       onDoubleClick={handleLayerDoubleClick}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
     >
-      {/* Preview retangular enquanto o usuário arrasta na folha */}
-      {drawingBox && (
-        <div
-          className={styles.drawingPreview}
-          style={{
-            left: Math.min(drawingBox.startX, drawingBox.currentX),
-            top: Math.min(drawingBox.startY, drawingBox.currentY),
-            width: Math.max(MIN_BOX_WIDTH, Math.abs(drawingBox.currentX - drawingBox.startX)),
-            height: Math.max(MIN_BOX_HEIGHT, Math.abs(drawingBox.currentY - drawingBox.startY)),
-          }}
-        >
-          <span className={styles.drawingHint}>Novo Texto</span>
-        </div>
-      )}
+      {/* Preview retangular com feedback de tamanho da letra enquanto arrasta */}
+      {drawingBox && (() => {
+        const previewW = Math.max(MIN_BOX_WIDTH, Math.abs(drawingBox.currentX - drawingBox.startX))
+        const previewH = Math.max(MIN_BOX_HEIGHT, Math.abs(drawingBox.currentY - drawingBox.startY))
+        const estimatedFontSize = Math.max(10, Math.min(72, Math.round(Math.max(14, previewH - 8) * 0.7)))
+        return (
+          <div
+            className={styles.drawingPreview}
+            style={{
+              left: Math.min(drawingBox.startX, drawingBox.currentX),
+              top: Math.min(drawingBox.startY, drawingBox.currentY),
+              width: previewW,
+              height: previewH,
+            }}
+          >
+            <span className={styles.drawingHint}>Texto</span>
+            <span className={styles.drawingSizeBadge}>{estimatedFontSize} px</span>
+          </div>
+        )
+      })()}
 
       {pageElements.map(el => (
         <TextBoxItem
