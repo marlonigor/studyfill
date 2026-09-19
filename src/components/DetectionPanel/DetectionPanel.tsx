@@ -14,6 +14,8 @@ import styles from './DetectionPanel.module.css'
 interface DetectionPanelProps {
   candidates: DetectionCandidate[]
   isDetecting: boolean
+  detectionProgress?: number
+  hasAttempted?: boolean
   onDetect: () => void
   onAccept: (candidate: DetectionCandidate) => void
   onReject: (candidateId: string) => void
@@ -25,6 +27,8 @@ interface DetectionPanelProps {
 export function DetectionPanel({
   candidates,
   isDetecting,
+  detectionProgress = 0,
+  hasAttempted = false,
   onDetect,
   onAccept,
   onReject,
@@ -36,8 +40,13 @@ export function DetectionPanel({
   return (
     <div className={styles.panel} role="complementary" aria-label="Painel de detecção de campos">
       <div className={styles.header}>
-        <span className={styles.title}>🔍 Detectar Campos</span>
-        <button className={styles.closeBtn} onClick={onClose} aria-label="Fechar painel">✕</button>
+        <span className={styles.title}>Detectar Campos</span>
+        <button className={styles.closeBtn} onClick={onClose} aria-label="Fechar painel">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
 
       <p className={styles.description}>
@@ -54,12 +63,44 @@ export function DetectionPanel({
         {isDetecting ? 'Analisando...' : 'Detectar nesta página'}
       </button>
 
-      {candidates.length === 0 && !isDetecting && (
-        <p className={styles.empty}>Nenhuma sugestão ainda. Clique em "Detectar".</p>
+      {isDetecting && (
+        <div className={styles.progressContainer} aria-live="polite">
+          <div className={styles.progressBar}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${Math.max(5, detectionProgress)}%` }}
+            />
+          </div>
+          <span className={styles.progressText}>
+            Escaneando linhas: {detectionProgress}%
+          </span>
+        </div>
+      )}
+
+      {hasAttempted && candidates.length === 0 && !isDetecting && (
+        <div className={styles.notFoundCard} role="status">
+          <p className={styles.notFoundTitle}>Nenhum campo detectado</p>
+          <p className={styles.notFoundDesc}>
+            Não foram encontradas linhas de preenchimento nesta página.
+          </p>
+          <p className={styles.notFoundHint}>
+            Dica: dê duplo clique no documento para adicionar caixas de texto manualmente.
+          </p>
+        </div>
+      )}
+
+      {!hasAttempted && candidates.length === 0 && !isDetecting && (
+        <p className={styles.empty}>Nenhuma detecção feita ainda nesta página.</p>
       )}
 
       {pending.length === 0 && candidates.length > 0 && (
-        <p className={styles.empty}>✅ Todas as sugestões foram revisadas.</p>
+        <p className={styles.empty}>Todas as sugestões foram revisadas.</p>
+      )}
+
+      {pending.length > 0 && !isDetecting && (
+        <p className={styles.summaryText}>
+          {pending.length} {pending.length === 1 ? 'sugestão encontrada' : 'sugestões encontradas'}:
+        </p>
       )}
 
       <ul className={styles.list}>

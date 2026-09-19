@@ -100,7 +100,7 @@ export function PDFCanvas({
       onSizeChangeRef.current?.(cssViewport.width, cssViewport.height)
 
       // Render do canvas
-      const renderTask = page.render({ canvasContext: ctx, viewport })
+      const renderTask = page.render({ canvasContext: ctx, viewport, canvas })
       renderTaskRef.current = renderTask
 
       try {

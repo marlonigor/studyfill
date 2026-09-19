@@ -68,7 +68,7 @@ export async function exportDocument(doc: StudyDocument): Promise<Uint8Array> {
  * @param filename - nome do arquivo (sem extensão)
  */
 export function downloadPdf(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([bytes], { type: 'application/pdf' })
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

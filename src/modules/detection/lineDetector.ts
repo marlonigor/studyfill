@@ -38,7 +38,6 @@ const DEFAULT_CONFIG: DetectionConfig = {
  */
 function yieldToMain(): Promise<void> {
   if (typeof scheduler !== 'undefined' && 'yield' in scheduler) {
-    // @ts-expect-error — scheduler.yield ainda não tem tipos no TS
     return scheduler.yield()
   }
   return new Promise(resolve => setTimeout(resolve, 0))
@@ -56,16 +55,20 @@ export async function detectHorizontalLines(
   imageData: ImageData,
   pageIndex: number,
   config: Partial<DetectionConfig> = {},
+  onProgress?: (progress: number) => void,
 ): Promise<DetectionCandidate[]> {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   const { width, height, data } = imageData
   const candidates: DetectionCandidate[] = []
   let idCounter = 0
 
+  onProgress?.(0)
+
   // Percorre cada linha de pixels em chunks assíncronos
   for (let row = 0; row < height; row++) {
-    // Cede ao main thread a cada N linhas para não travar a UI
+    // Cede ao main thread a cada N linhas para não travar a UI e reporta progresso
     if (row > 0 && row % cfg.rowsPerChunk === 0) {
+      onProgress?.(Math.round((row / height) * 100))
       await yieldToMain()
     }
 
@@ -91,6 +94,7 @@ export async function detectHorizontalLines(
     }
   }
 
+  onProgress?.(100)
   return mergeCandidatesNearby(candidates)
 }
 

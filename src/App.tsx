@@ -41,6 +41,8 @@ export default function App() {
   const [showDetection, setShowDetection] = useState(false)
   const [candidates, setCandidates] = useState<DetectionCandidate[]>([])
   const [isDetecting, setIsDetecting] = useState(false)
+  const [detectionProgress, setDetectionProgress] = useState(0)
+  const [hasAttemptedDetection, setHasAttemptedDetection] = useState(false)
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -190,11 +192,22 @@ export default function App() {
 
   // ── Navegação de páginas ─────────────────────────────────────────────────
 
-  const handlePrevPage = useCallback(() => setCurrentPage(p => Math.max(1, p - 1)), [])
-  const handleNextPage = useCallback(
-    () => setCurrentPage(p => Math.min(totalPages, p + 1)),
-    [totalPages],
-  )
+  const resetDetection = useCallback(() => {
+    setCandidates([])
+    setHasAttemptedDetection(false)
+    setDetectionProgress(0)
+    setHighlightedCandidate(null)
+  }, [])
+
+  const handlePrevPage = useCallback(() => {
+    setCurrentPage(p => Math.max(1, p - 1))
+    resetDetection()
+  }, [resetDetection])
+
+  const handleNextPage = useCallback(() => {
+    setCurrentPage(p => Math.min(totalPages, p + 1))
+    resetDetection()
+  }, [totalPages, resetDetection])
 
   // ── Callbacks estáveis para PDFCanvas ────────────────────────────────────
   // Precisam ser estáveis para que o useLayoutEffect no PDFCanvas não execute
@@ -217,9 +230,17 @@ export default function App() {
   const handleDetect = useCallback(async () => {
     if (!lastImageDataRef.current) return
     setIsDetecting(true)
+    setDetectionProgress(0)
+    setHasAttemptedDetection(false)
     try {
-      const found = await detectHorizontalLines(lastImageDataRef.current, currentPage - 1)
+      const found = await detectHorizontalLines(
+        lastImageDataRef.current,
+        currentPage - 1,
+        {},
+        progress => setDetectionProgress(progress),
+      )
       setCandidates(found)
+      setHasAttemptedDetection(true)
     } finally {
       setIsDetecting(false)
     }
@@ -254,14 +275,14 @@ export default function App() {
       {/* Toast de erro */}
       {(errorMsg || pdfError) && (
         <div className={styles.toast} role="alert" data-type="error">
-          ⚠ {errorMsg || pdfError}
+          {errorMsg || pdfError}
         </div>
       )}
 
       {/* Toast de sucesso */}
       {successMsg && (
         <div className={styles.toast} role="status" data-type="success">
-          ✓ {successMsg}
+          {successMsg}
         </div>
       )}
 
@@ -296,6 +317,8 @@ export default function App() {
                 <DetectionPanel
                   candidates={candidates}
                   isDetecting={isDetecting}
+                  detectionProgress={detectionProgress}
+                  hasAttempted={hasAttemptedDetection}
                   onDetect={handleDetect}
                   onAccept={handleAcceptCandidate}
                   onReject={handleRejectCandidate}

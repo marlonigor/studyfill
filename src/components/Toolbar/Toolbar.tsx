@@ -46,7 +46,6 @@ export function Toolbar({
     <header className={styles.toolbar} role="toolbar" aria-label="Barra de ferramentas">
       {/* Logo */}
       <div className={styles.brand}>
-        <span className={styles.logo}>📖</span>
         <span className={styles.brandName}>StudyFill</span>
       </div>
 
@@ -58,7 +57,7 @@ export function Toolbar({
           onClick={onImport}
           title="Importar PDF"
         >
-          ＋ Importar PDF
+          Importar PDF
         </button>
       </div>
 
@@ -109,7 +108,7 @@ export function Toolbar({
             onClick={onOpenDetection}
             title="Detectar campos"
           >
-            🔍 Detectar
+            Detectar
           </button>
           <button
             id="btn-save"
@@ -118,7 +117,7 @@ export function Toolbar({
             disabled={isSaving}
             title="Salvar progresso"
           >
-            {isSaving ? 'Salvando...' : '💾 Salvar'}
+            {isSaving ? 'Salvando...' : 'Salvar'}
           </button>
           <button
             id="btn-export"
@@ -127,7 +126,7 @@ export function Toolbar({
             disabled={isExporting}
             title="Exportar PDF preenchido"
           >
-            {isExporting ? 'Exportando...' : '⬇ Exportar PDF'}
+            {isExporting ? 'Exportando...' : 'Exportar PDF'}
           </button>
         </div>
       )}
