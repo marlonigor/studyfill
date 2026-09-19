@@ -3,11 +3,12 @@
  *
  * Renderiza todos os TextBoxes da página atual como divs absolutamente
  * posicionados. Suporta:
+ * - Modo de edição de texto: clique livre ou arrasto cria novas caixas
  * - Duplo clique na área livre → cria novo TextBox
  * - Drag → move o TextBox
  * - Handles de resize → redimensiona
  * - Clique no ícone X → exclui
- * - Clique no box → ativa edição inline
+ * - Clique no box → ativa edição inline e notifica seleção para formatação
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -21,8 +22,13 @@ interface TextBoxLayerProps {
   canvasWidth: number
   canvasHeight: number
   isTextToolActive?: boolean
+  selectedId?: string | null
+  onSelectElement?: (element: TextBoxElement | null) => void
   onAdd: (position: RelativePosition) => TextBoxElement | string | void
-  onUpdate: (id: string, changes: Partial<Pick<TextBoxElement, 'content' | 'position'>>) => void
+  onUpdate: (
+    id: string,
+    changes: Partial<Pick<TextBoxElement, 'content' | 'position' | 'fontSize' | 'fontColor' | 'fontFamily'>>,
+  ) => void
   onDelete: (id: string) => void
 }
 
@@ -44,14 +50,30 @@ export function TextBoxLayer({
   canvasWidth,
   canvasHeight,
   isTextToolActive = false,
+  selectedId = null,
+  onSelectElement,
   onAdd,
   onUpdate,
   onDelete,
 }: TextBoxLayerProps) {
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [internalActiveId, setInternalActiveId] = useState<string | null>(null)
   const [drawingBox, setDrawingBox] = useState<DrawingBox | null>(null)
   const layerRef = useRef<HTMLDivElement>(null)
   const isDrawingRef = useRef(false)
+
+  const activeId = selectedId !== undefined ? selectedId : internalActiveId
+
+  const handleActivate = useCallback(
+    (el: TextBoxElement) => {
+      setInternalActiveId(el.id)
+      onSelectElement?.(el)
+    },
+    [onSelectElement],
+  )
+
+  const handleDeactivate = useCallback(() => {
+    setInternalActiveId(null)
+  }, [])
 
   // ── Criação por duplo clique (atalho clássico permanente) ──────────────────
   const handleLayerDoubleClick = useCallback(
@@ -71,35 +93,45 @@ export function TextBoxLayer({
       }
       const created = onAdd(position)
       const createdId = typeof created === 'object' && created ? created.id : created
-      if (createdId) setActiveId(createdId)
+      if (createdId) {
+        setInternalActiveId(createdId)
+        const found = elements.find(el => el.id === createdId)
+        if (found) onSelectElement?.(found)
+      }
     },
-    [canvasWidth, canvasHeight, onAdd],
+    [canvasWidth, canvasHeight, onAdd, elements, onSelectElement],
   )
 
-  // ── Ferramenta de Texto estilo Paint (clique e arrasto ou clique simples) ──
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isTextToolActive) return
-    if ((e.target as HTMLElement).closest('[data-textbox]')) return
-    if (e.button !== 0) return
+  // ── Ferramenta de Texto: clique e arrasto ou clique simples onde quiser ───
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isTextToolActive) return
+      if ((e.target as HTMLElement).closest('[data-textbox]')) return
+      if (e.button !== 0) return
 
-    const rect = layerRef.current?.getBoundingClientRect()
-    if (!rect) return
+      const rect = layerRef.current?.getBoundingClientRect()
+      if (!rect) return
 
-    const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
-    const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
+      const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
+      const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
 
-    isDrawingRef.current = true
-    setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y })
-  }, [isTextToolActive, canvasWidth, canvasHeight])
+      isDrawingRef.current = true
+      setDrawingBox({ startX: x, startY: y, currentX: x, currentY: y })
+    },
+    [isTextToolActive, canvasWidth, canvasHeight],
+  )
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDrawingRef.current || !layerRef.current) return
-    const rect = layerRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
-    const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isDrawingRef.current || !layerRef.current) return
+      const rect = layerRef.current.getBoundingClientRect()
+      const x = Math.max(0, Math.min(canvasWidth, e.clientX - rect.left))
+      const y = Math.max(0, Math.min(canvasHeight, e.clientY - rect.top))
 
-    setDrawingBox(prev => prev ? { ...prev, currentX: x, currentY: y } : null)
-  }, [canvasWidth, canvasHeight])
+      setDrawingBox(prev => (prev ? { ...prev, currentX: x, currentY: y } : null))
+    },
+    [canvasWidth, canvasHeight],
+  )
 
   const handleMouseUp = useCallback(() => {
     if (!isDrawingRef.current || !drawingBox) return
@@ -113,7 +145,7 @@ export function TextBoxLayer({
     let wPx = rawW
     let hPx = rawH
 
-    // Clique simples estilo Paint: cria tamanho padrão a partir do ponto clicado
+    // Clique simples: cria caixa de texto pronta no ponto clicado
     if (rawW < 12 && rawH < 12) {
       wPx = Math.max(MIN_BOX_WIDTH, canvasWidth * DEFAULT_BOX_WIDTH_RATIO)
       hPx = Math.max(MIN_BOX_HEIGHT, canvasHeight * DEFAULT_BOX_HEIGHT_RATIO)
@@ -134,11 +166,14 @@ export function TextBoxLayer({
     const created = onAdd(relPos)
     const createdId = typeof created === 'object' && created ? created.id : created
     if (createdId) {
-      setActiveId(createdId)
+      setInternalActiveId(createdId)
+      if (typeof created === 'object' && created) {
+        onSelectElement?.(created)
+      }
     }
 
     setDrawingBox(null)
-  }, [drawingBox, canvasWidth, canvasHeight, onAdd])
+  }, [drawingBox, canvasWidth, canvasHeight, onAdd, onSelectElement])
 
   const pageElements = elements.filter(el => el.pageIndex === pageIndex)
 
@@ -152,7 +187,7 @@ export function TextBoxLayer({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {/* Preview retangular enquanto o usuário arrasta estilo Paint */}
+      {/* Preview retangular enquanto o usuário arrasta na folha */}
       {drawingBox && (
         <div
           className={styles.drawingPreview}
@@ -163,7 +198,7 @@ export function TextBoxLayer({
             height: Math.max(MIN_BOX_HEIGHT, Math.abs(drawingBox.currentY - drawingBox.startY)),
           }}
         >
-          <span className={styles.drawingHint}>Texto</span>
+          <span className={styles.drawingHint}>Novo Texto</span>
         </div>
       )}
 
@@ -174,8 +209,8 @@ export function TextBoxLayer({
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
           isActive={activeId === el.id}
-          onActivate={() => setActiveId(el.id)}
-          onDeactivate={() => setActiveId(null)}
+          onActivate={() => handleActivate(el)}
+          onDeactivate={handleDeactivate}
           onUpdate={onUpdate}
           onDelete={onDelete}
         />
@@ -193,7 +228,10 @@ interface TextBoxItemProps {
   isActive: boolean
   onActivate: () => void
   onDeactivate: () => void
-  onUpdate: (id: string, changes: Partial<Pick<TextBoxElement, 'content' | 'position'>>) => void
+  onUpdate: (
+    id: string,
+    changes: Partial<Pick<TextBoxElement, 'content' | 'position' | 'fontSize' | 'fontColor' | 'fontFamily'>>,
+  ) => void
   onDelete: (id: string) => void
 }
 
@@ -263,6 +301,13 @@ function TextBoxItem({
     window.addEventListener('mouseup', onUp)
   }
 
+  const fontFamilyStyle =
+    element.fontFamily === 'Source Serif 4'
+      ? 'var(--font-serif)'
+      : element.fontFamily === 'JetBrains Mono'
+      ? 'var(--font-mono)'
+      : 'var(--font-sans)'
+
   return (
     <div
       data-textbox={element.id}
@@ -274,6 +319,7 @@ function TextBoxItem({
         height: px.height,
         fontSize: element.fontSize,
         color: element.fontColor,
+        fontFamily: fontFamilyStyle,
       }}
       onClick={onActivate}
     >
@@ -289,23 +335,40 @@ function TextBoxItem({
         onChange={e => onUpdate(element.id, { content: e.target.value })}
         onFocus={onActivate}
         onBlur={onDeactivate}
-        style={{ fontSize: element.fontSize, color: element.fontColor }}
+        style={{
+          fontSize: element.fontSize,
+          color: element.fontColor,
+          fontFamily: fontFamilyStyle,
+        }}
       />
 
       {/* Botão de excluir */}
       <button
         className={styles.deleteBtn}
-        onClick={e => { e.stopPropagation(); onDelete(element.id) }}
+        onClick={e => {
+          e.stopPropagation()
+          onDelete(element.id)
+        }}
         title="Excluir campo"
         aria-label="Excluir campo de texto"
       >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
 
-      {/* Handle de resize (canto inferior direito) */}
+      {/* Handle de resize */}
       <div className={styles.resizeHandle} onMouseDown={handleResizeMouseDown} title="Redimensionar" />
     </div>
   )

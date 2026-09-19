@@ -1,0 +1,203 @@
+/* TextFormatToolbar.module.css — Scholar Script */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--color-surface-container-lowest);
+  border-bottom: 1px solid var(--border-hairline);
+  padding: 8px 20px;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04);
+  z-index: 50;
+  flex-wrap: wrap;
+  animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Indicador de Status */
+.modeBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modeIcon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modeText {
+  display: flex;
+  flex-direction: column;
+}
+
+.modeTitle {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+
+.modeHint {
+  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+  line-height: 1.2;
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background-color: var(--border-hairline);
+}
+
+/* Grupos de controle */
+.controlGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.groupLabel {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.select {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.select:hover,
+.select:focus {
+  border-color: var(--color-primary);
+  background-color: var(--color-surface-container-lowest);
+}
+
+/* Tamanho de Fonte */
+.sizeButtonGroup {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: var(--color-surface-container-low);
+}
+
+.sizeStepBtn {
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sizeStepBtn:hover {
+  background-color: var(--color-surface-container-high);
+  color: var(--color-primary);
+}
+
+.sizeSelect {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border-hairline);
+  border-right: 1px solid var(--border-hairline);
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Paleta de Cores */
+.colorPalette {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.colorChip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+  padding: 0;
+}
+
+.colorChip:hover {
+  transform: scale(1.15);
+}
+
+.colorChipActive {
+  border-color: var(--color-surface-container-lowest);
+  box-shadow: 0 0 0 2px var(--color-primary);
+  transform: scale(1.15);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Botão Concluir Edição */
+.exitBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--color-state-saved);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.25);
+  transition: all var(--transition-fast);
+}
+
+.exitBtn:hover {
+  background-color: #15803d;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.4);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  background-color: rgba(255, 255, 255, 0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

@@ -18,6 +18,7 @@ import { DocumentList } from './components/DocumentList/DocumentList'
 import { ExportModal } from './components/ExportModal/ExportModal'
 import { PDFCanvas } from './components/PDFCanvas/PDFCanvas'
 import { TextBoxLayer } from './components/TextBoxLayer/TextBoxLayer'
+import { TextFormatToolbar } from './components/TextFormatToolbar/TextFormatToolbar'
 import { Toolbar } from './components/Toolbar/Toolbar'
 import { useElements } from './hooks/useElements'
 import { usePdfViewer } from './hooks/usePdfViewer'
@@ -32,7 +33,7 @@ import {
   openDatabase,
   saveDocument,
 } from './modules/persistence/database'
-import type { DetectionCandidate, StudyDocument } from './types'
+import type { DetectionCandidate, StudyDocument, TextBoxElement } from './types'
 import styles from './App.module.css'
 
 type Screen = 'list' | 'editor'
@@ -53,6 +54,10 @@ export default function App() {
   const [detectionProgress, setDetectionProgress] = useState(0)
   const [hasAttemptedDetection, setHasAttemptedDetection] = useState(false)
   const [isTextToolActive, setIsTextToolActive] = useState(false)
+  const [activeFontFamily, setActiveFontFamily] = useState('Inter')
+  const [activeFontSize, setActiveFontSize] = useState(14)
+  const [activeFontColor, setActiveFontColor] = useState('#0f172a')
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null)
   const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -192,6 +197,55 @@ export default function App() {
     }
   }, [currentDoc, editLayer])
 
+  // ── Modo de Edição e Formatação de Texto ─────────────────────────────────
+
+  const handleChangeFontFamily = useCallback(
+    (font: string) => {
+      setActiveFontFamily(font)
+      if (selectedBoxId) {
+        updateTextBox(selectedBoxId, { fontFamily: font })
+      }
+    },
+    [selectedBoxId, updateTextBox],
+  )
+
+  const handleChangeFontSize = useCallback(
+    (size: number) => {
+      setActiveFontSize(size)
+      if (selectedBoxId) {
+        updateTextBox(selectedBoxId, { fontSize: size })
+      }
+    },
+    [selectedBoxId, updateTextBox],
+  )
+
+  const handleChangeFontColor = useCallback(
+    (color: string) => {
+      setActiveFontColor(color)
+      if (selectedBoxId) {
+        updateTextBox(selectedBoxId, { fontColor: color })
+      }
+    },
+    [selectedBoxId, updateTextBox],
+  )
+
+  const handleSelectElement = useCallback((element: TextBoxElement | null) => {
+    if (element) {
+      setSelectedBoxId(element.id)
+      setActiveFontFamily(element.fontFamily || 'Inter')
+      setActiveFontSize(element.fontSize || 14)
+      setActiveFontColor(element.fontColor || '#0f172a')
+      setIsTextToolActive(true)
+    } else {
+      setSelectedBoxId(null)
+    }
+  }, [])
+
+  const handleExitTextMode = useCallback(() => {
+    setIsTextToolActive(false)
+    setSelectedBoxId(null)
+  }, [])
+
   // ── Exportação com opções da Tela 3 ──────────────────────────────────────
 
   const handleExportConfirm = useCallback(
@@ -314,12 +368,12 @@ export default function App() {
         activeEl?.tagName === 'TEXTAREA' ||
         (activeEl as HTMLElement)?.isContentEditable
 
-      // Esc para fechar modal ou detecção ou ferramenta de texto
+      // Esc para fechar modal ou desativar modo de edição ou fechar detecção
       if (e.key === 'Escape') {
         if (isExportModalOpen) {
           setIsExportModalOpen(false)
-        } else if (isTextToolActive) {
-          setIsTextToolActive(false)
+        } else if (isTextToolActive || selectedBoxId) {
+          handleExitTextMode()
         } else if (showDetection) {
           setShowDetection(false)
         }
@@ -355,16 +409,20 @@ export default function App() {
       if (!isInput && (e.key === 't' || e.key === 'T')) {
         if (screen === 'editor') {
           e.preventDefault()
-          setIsTextToolActive(prev => !prev)
+          if (isTextToolActive || selectedBoxId) {
+            handleExitTextMode()
+          } else {
+            setIsTextToolActive(true)
+          }
         }
         return
       }
 
-      // Tecla V: modo seleção
+      // Tecla V: modo seleção / sair da edição
       if (!isInput && (e.key === 'v' || e.key === 'V')) {
         if (screen === 'editor') {
           e.preventDefault()
-          setIsTextToolActive(false)
+          handleExitTextMode()
         }
         return
       }
@@ -375,10 +433,12 @@ export default function App() {
   }, [
     isExportModalOpen,
     isTextToolActive,
+    selectedBoxId,
     showDetection,
     screen,
     currentDoc,
     handleSave,
+    handleExitTextMode,
   ])
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -431,8 +491,14 @@ export default function App() {
             isSaving={isSaving}
             isExporting={isExporting}
             hasDocument={!!pdfDoc}
-            isTextToolActive={isTextToolActive}
-            onToggleTextTool={() => setIsTextToolActive(prev => !prev)}
+            isTextToolActive={isTextToolActive || selectedBoxId !== null}
+            onToggleTextTool={() => {
+              if (isTextToolActive || selectedBoxId !== null) {
+                handleExitTextMode()
+              } else {
+                setIsTextToolActive(true)
+              }
+            }}
             onImport={handleImportClick}
             onSave={handleSave}
             onExport={() => setIsExportModalOpen(true)}
@@ -444,6 +510,20 @@ export default function App() {
             onOpenDetection={() => setShowDetection(true)}
             detectedCount={candidates.filter(c => !c.accepted).length}
           />
+
+          {/* Barra de Formatação do Modo de Edição de Texto */}
+          {(isTextToolActive || selectedBoxId !== null) && (
+            <TextFormatToolbar
+              fontFamily={activeFontFamily}
+              fontSize={activeFontSize}
+              fontColor={activeFontColor}
+              hasSelectedBox={selectedBoxId !== null}
+              onChangeFontFamily={handleChangeFontFamily}
+              onChangeFontSize={handleChangeFontSize}
+              onChangeFontColor={handleChangeFontColor}
+              onExitEditMode={handleExitTextMode}
+            />
+          )}
 
           <div className={styles.workspace}>
             {/* Painel lateral de detecção */}
@@ -488,9 +568,20 @@ export default function App() {
                       canvasWidth={canvasSize.w}
                       canvasHeight={canvasSize.h}
                       isTextToolActive={isTextToolActive}
-                      onAdd={pos => addTextBox(currentPage - 1, pos)}
+                      selectedId={selectedBoxId}
+                      onSelectElement={handleSelectElement}
+                      onAdd={pos =>
+                        addTextBox(currentPage - 1, pos, {
+                          fontFamily: activeFontFamily,
+                          fontSize: activeFontSize,
+                          fontColor: activeFontColor,
+                        })
+                      }
                       onUpdate={updateTextBox}
-                      onDelete={deleteTextBox}
+                      onDelete={id => {
+                        deleteTextBox(id)
+                        if (selectedBoxId === id) setSelectedBoxId(null)
+                      }}
                     />
                   )}
                   {canvasSize.w > 0 && highlightedCandidate && (

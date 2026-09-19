@@ -18,8 +18,15 @@ function nowIso(): string {
 
 export interface UseElementsReturn {
   editLayer: EditLayer
-  addTextBox: (pageIndex: number, position: RelativePosition) => TextBoxElement
-  updateTextBox: (id: string, changes: Partial<Pick<TextBoxElement, 'content' | 'position' | 'fontSize' | 'fontColor'>>) => void
+  addTextBox: (
+    pageIndex: number,
+    position: RelativePosition,
+    initialProps?: Partial<Pick<TextBoxElement, 'fontSize' | 'fontColor' | 'fontFamily'>>,
+  ) => TextBoxElement
+  updateTextBox: (
+    id: string,
+    changes: Partial<Pick<TextBoxElement, 'content' | 'position' | 'fontSize' | 'fontColor' | 'fontFamily'>>,
+  ) => void
   deleteTextBox: (id: string) => void
   loadEditLayer: (layer: EditLayer) => void
   acceptCandidate: (pageIndex: number, position: RelativePosition) => TextBoxElement
@@ -33,16 +40,22 @@ export function useElements(documentId: string): UseElementsReturn {
     updatedAt: nowIso(),
   })
 
-  const addTextBox = useCallback((pageIndex: number, position: RelativePosition): TextBoxElement => {
-    const newBox: TextBoxElement = {
-      id: generateId(),
-      type: 'textbox',
-      pageIndex,
-      position,
-      content: '',
-      fontSize: 12,
-      fontColor: '#1a1a2e',
-    }
+  const addTextBox = useCallback(
+    (
+      pageIndex: number,
+      position: RelativePosition,
+      initialProps?: Partial<Pick<TextBoxElement, 'fontSize' | 'fontColor' | 'fontFamily'>>,
+    ): TextBoxElement => {
+      const newBox: TextBoxElement = {
+        id: generateId(),
+        type: 'textbox',
+        pageIndex,
+        position,
+        content: '',
+        fontSize: initialProps?.fontSize ?? 14,
+        fontColor: initialProps?.fontColor ?? '#0f172a',
+        fontFamily: initialProps?.fontFamily ?? 'Inter',
+      }
     setEditLayer(prev => ({
       ...prev,
       elements: [...prev.elements, newBox],

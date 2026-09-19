@@ -30,6 +30,7 @@ export interface TextBoxElement {
   content: string
   fontSize: number
   fontColor: string
+  fontFamily?: string
 }
 
 /** Camada de edição: todos os elementos adicionados sobre um documento. */

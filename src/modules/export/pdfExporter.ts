@@ -28,7 +28,6 @@ export async function exportDocument(
   options: ExportOptions = {},
 ): Promise<Uint8Array> {
   const originalPdf = await PDFDocument.load(doc.originalPdfBuffer)
-  const font = await originalPdf.embedFont(StandardFonts.Helvetica)
   const textBoxes = doc.editLayer.elements.filter(
     (el): el is TextBoxElement => el.type === 'textbox' && el.content.trim().length > 0,
   )
@@ -47,8 +46,10 @@ export async function exportDocument(
     })
   }
 
+  const fontSans = await targetDoc.embedFont(StandardFonts.Helvetica)
+  const fontSerif = await targetDoc.embedFont(StandardFonts.TimesRoman)
+  const fontMono = await targetDoc.embedFont(StandardFonts.Courier)
   const pages = targetDoc.getPages()
-  const targetFont = targetDoc === originalPdf ? font : await targetDoc.embedFont(StandardFonts.Helvetica)
 
   for (const box of textBoxes) {
     const targetPageIndex = options.onlyAnsweredPages && textBoxes.length > 0
@@ -58,6 +59,13 @@ export async function exportDocument(
     if (targetPageIndex === undefined) continue
     const page = pages[targetPageIndex]
     if (!page) continue
+
+    const selectedFont =
+      box.fontFamily === 'Source Serif 4'
+        ? fontSerif
+        : box.fontFamily === 'JetBrains Mono'
+        ? fontMono
+        : fontSans
 
     const { width: pageW, height: pageH } = page.getSize()
     const pts = relativeToPdfPoints(box.position, pageW, pageH)
@@ -81,7 +89,7 @@ export async function exportDocument(
       x: pts.x + 2,
       y: pts.y + pts.height / 2 - box.fontSize / 2,
       size: box.fontSize,
-      font: targetFont,
+      font: selectedFont,
       color: rgb(r, g, b),
       maxWidth: pts.width - 4,
     })
