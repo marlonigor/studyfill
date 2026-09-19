@@ -73,7 +73,7 @@ export function Toolbar({
   }
 
   return (
-    <header className={styles.toolbar} role="toolbar" aria-label="Barra de ferramentas do EstudoPDF">
+    <header className={styles.toolbar} role="toolbar" aria-label="Barra de ferramentas do StudyFill">
       {/* Grupo Esquerdo: Navegação e Identidade do Documento */}
       <div className={styles.leftGroup}>
         {onBack && (
@@ -103,7 +103,7 @@ export function Toolbar({
         )}
 
         <div className={styles.brandBadge}>
-          <span className={styles.brandLogoText}>EstudoPDF</span>
+          <span className={styles.brandLogoText}>StudyFill</span>
         </div>
 
         {hasDocument && (
