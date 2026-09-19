@@ -26,6 +26,7 @@ export function PDFCanvas({
   onRenderComplete,
   onSizeChange,
 }: PDFCanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textLayerRef = useRef<HTMLDivElement>(null)
   const renderTaskRef = useRef<pdfjs.RenderTask | null>(null)
@@ -73,7 +74,26 @@ export function PDFCanvas({
       canvas.style.width = `${cssViewport.width}px`
       canvas.style.height = `${cssViewport.height}px`
 
-      // Text layer: mesmas dimensões CSS do canvas
+      // Configura variáveis de escala do PDF.js essenciais para o TextLayer calcular
+      // corretamente font-size, dimensões e posicionamento dos spans de texto.
+      const userUnit = cssViewport.userUnit || 1
+      const totalScale = cssViewport.scale * userUnit
+
+      const applyScaleVars = (el: HTMLElement) => {
+        el.style.setProperty('--scale-factor', `${cssViewport.scale}`)
+        el.style.setProperty('--user-unit', `${userUnit}`)
+        el.style.setProperty('--total-scale-factor', `${totalScale}`)
+        el.style.setProperty('--scale-round-x', '1px')
+        el.style.setProperty('--scale-round-y', '1px')
+      }
+
+      if (containerRef.current) {
+        applyScaleVars(containerRef.current)
+        containerRef.current.style.width = `${cssViewport.width}px`
+        containerRef.current.style.height = `${cssViewport.height}px`
+      }
+
+      applyScaleVars(textLayerDiv)
       textLayerDiv.style.width = `${cssViewport.width}px`
       textLayerDiv.style.height = `${cssViewport.height}px`
 
@@ -99,7 +119,7 @@ export function PDFCanvas({
         return // Se cancelou, não tenta renderizar text layer
       }
 
-      // TextLayer: camada de texto selecionável sobre o canvas
+      // TextLayer: camada de texto selecionável perfeitamente calibrada sobre o canvas
       if (cancelled) return
       try {
         const textContent = await page.getTextContent()
@@ -112,6 +132,12 @@ export function PDFCanvas({
         })
         textLayerInstanceRef.current = textLayer
         await textLayer.render()
+
+        // Assegura dimensões exatas caso setLayerDimensions tenha usado expressões parciais
+        if (!cancelled && textLayerRef.current) {
+          textLayerRef.current.style.width = `${cssViewport.width}px`
+          textLayerRef.current.style.height = `${cssViewport.height}px`
+        }
       } catch (err) {
         // Ignora erros de cancelamento no text layer
         if (!(err instanceof Error && err.message.includes('cancel'))) {
@@ -130,7 +156,7 @@ export function PDFCanvas({
   }, [pdfDoc, pageNumber, zoom])
 
   return (
-    <div className={styles.pageContainer}>
+    <div ref={containerRef} className={`${styles.pageContainer} page`}>
       <canvas ref={canvasRef} className={styles.canvas} />
       <div ref={textLayerRef} className={`textLayer ${styles.textLayer}`} />
     </div>

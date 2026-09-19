@@ -3,6 +3,9 @@
   position: relative;
   display: inline-block;
   line-height: 0;
+  --user-unit: 1;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
 }
 
 .canvas {
@@ -11,18 +14,44 @@
   border-radius: 2px;
 }
 
-/* Text layer posicionado sobre o canvas para seleção de texto */
+/*
+ * TextLayer do PDF.js:
+ * Posicionado com precisão sobre o canvas para permitir seleção nativa de texto.
+ * Deve manter opacity: 1 pois os spans internos usam color: transparent.
+ * Variáveis CSS de escala (--total-scale-factor, etc.) são essenciais para o font-size dos spans.
+ */
 .textLayer {
   position: absolute;
   top: 0;
   left: 0;
-  overflow: hidden;
-  opacity: 0.25;
+  right: 0;
+  bottom: 0;
+  overflow: clip;
+  opacity: 1;
   line-height: 1;
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
+  z-index: 2;
+  --user-unit: 1;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
 }
 
-/*
- * O text layer do PDF.js usa a classe global .textLayer com spans
- * posicionados absolutamente. Quando o usuário seleciona texto,
- * a seleção fica visível; fora da seleção, os spans são transparentes.
- */
+.textLayer :global(span) {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Highlight de seleção com tom indigo elegante do StudyFill */
+.textLayer ::selection {
+  background: rgba(99, 102, 241, 0.4);
+  color: transparent;
+}
+
+.textLayer ::-moz-selection {
+  background: rgba(99, 102, 241, 0.4);
+  color: transparent;
+}
+
